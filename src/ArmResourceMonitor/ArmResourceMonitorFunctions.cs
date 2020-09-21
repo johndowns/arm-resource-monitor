@@ -10,27 +10,51 @@ using System.Text.RegularExpressions;
 
 namespace ArmResourceMonitor
 {
+    public class AddResourceMonitorRequest
+    {
+        public string ResourceId { get; set; }
+
+        public string ApiVersion { get; set; }
+
+        public int CheckFrequencySeconds { get; set; } = 86400; // TODO change to minutes/days/timespan?
+    }
+
     public static class ArmResourceMonitorFunctions
     {
         public static readonly Regex DisallowedCharsInTableKeys = new Regex(@"[\\\\#%+/?\u0000-\u001F\u007F-\u009F]");
 
         [FunctionName("AddResourceMonitor")]
         public static async Task<IActionResult> AddResourceMonitor(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] AddResourceMonitorRequest request,
             ILogger log,
             [DurableClient] IDurableEntityClient entityClient)
         {
-            var resourceId = "/subscriptions/d178c7c4-ffb7-467e-a397-042c1d428092/resourceGroups/longlivedforreference/providers/Microsoft.Network/frontdoors/jodownsll";
-            var apiVersion = "2019-05-01"; // TODO try to detect if not specified
+            // Validate the request body.
+            if (request.ResourceId == null)
+            {
+                return new BadRequestObjectResult(new
+                {
+                    error = "resourceId must be specified."
+                });
+            }
 
-            // Assemble the request.
-            var checkFrequency = TimeSpan.FromSeconds(30);
-            // TODO
+            if (request.ApiVersion == null)
+            {
+                request.ApiVersion = await ArmClient.GetLatestApiVersionForResource(request.ResourceId);
+
+                if (request.ApiVersion == null)
+                {
+                    return new BadRequestObjectResult(new
+                    {
+                        error = "apiVersion could not be automatically determined and so must be specified."
+                    });
+                }
+            }
 
             // Initialize the monitor entity.
-            var resourceMonitorId = DisallowedCharsInTableKeys.Replace(resourceId, "|");
+            var resourceMonitorId = DisallowedCharsInTableKeys.Replace(request.ResourceId, "|");
             var entityId = new EntityId(nameof(ResourceMonitorEntity), resourceMonitorId);
-            await entityClient.SignalEntityAsync(entityId, nameof(ResourceMonitorEntity.Initialize), (resourceId, apiVersion, checkFrequency));
+            await entityClient.SignalEntityAsync(entityId, nameof(ResourceMonitorEntity.Initialize), (request.ResourceId, request.ApiVersion, TimeSpan.FromSeconds(request.CheckFrequencySeconds)));
 
             return new OkResult();
         }
