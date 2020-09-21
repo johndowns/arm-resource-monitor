@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using System.Web;
 using JsonDiffPatchDotNet;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Azure.Storage.Queue;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
@@ -46,8 +44,6 @@ namespace ArmResourceMonitor
 
         private CloudQueue ErrorQueue { get; set; }
 
-        private static HttpClient HttpClient { get; set; } = new HttpClient();
-
         [FunctionName(nameof(ResourceMonitorEntity))]
         public static Task Run(
             [EntityTrigger] IDurableEntityContext ctx,
@@ -89,7 +85,7 @@ namespace ArmResourceMonitor
             try
             {
                 // Make an ARM API request to get the resource body.
-                var newState = await GetResourceAsync();
+                var newState = await ArmClient.GetResourceAsync(ResourceId, ApiVersion);
 
                 // Check if is different from the old state.
                 if (IsJsonDifferent(CurrentState, newState, out var diff))
@@ -118,27 +114,6 @@ namespace ArmResourceMonitor
 
             // Schedule the next check.
             Entity.Current.SignalEntity(Entity.Current.EntityId, DateTime.UtcNow.Add(CheckFrequency), nameof(CheckResource));
-        }
-
-        private async Task<string> GetResourceAsync()
-        {
-            // Initialize the request authorization using the app's managed identity.
-            var azureServiceTokenProvider = new AzureServiceTokenProvider();
-            var token = await azureServiceTokenProvider.GetAccessTokenAsync("https://management.azure.com");
-            HttpClient.DefaultRequestHeaders.Remove("Authorization");
-            HttpClient.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
-            
-            // Build the URL of the API to access.
-            var uriBuilder = new UriBuilder("https://management.azure.com/");
-            uriBuilder.Path = ResourceId;
-            var query = HttpUtility.ParseQueryString(uriBuilder.Query);
-            query["api-version"] = ApiVersion;
-            uriBuilder.Query = query.ToString();
-
-            // Submit the request.
-            var response = await HttpClient.GetAsync(uriBuilder.Uri);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
         }
 
         private static bool IsJsonDifferent(string currentState, string newState, out string diff)
