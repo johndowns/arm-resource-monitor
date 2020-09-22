@@ -1,5 +1,7 @@
-﻿using Microsoft.Azure.Services.AppAuthentication;
+﻿using Azure.Identity;
+using Microsoft.Azure.Services.AppAuthentication;
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web;
@@ -33,7 +35,16 @@ namespace ArmResourceMonitor
 
         public static async Task<string> GetLatestApiVersionForResource(string resourceId)
         {
-            return null;
+            // Parse the resource provider and subscription ID out of the resource ID.
+            // TODO
+            var resourceProviderNamespaceName = "Microsoft.Network";
+            var resourceTypeName = "frontDoors";
+            var subscriptionId = "TODO";
+
+            var client = new Azure.ResourceManager.Resources.ResourcesManagementClient(subscriptionId, new DefaultAzureCredential());
+            var resourceProviderNamespace = client.Providers.Get(resourceProviderNamespaceName).Value;
+            var resourceType = resourceProviderNamespace?.ResourceTypes.SingleOrDefault(t => string.Equals(t.ResourceType, resourceTypeName, StringComparison.InvariantCultureIgnoreCase));
+            return resourceType?.ApiVersions.First(); // TODO sort order
         }
     }
 }
