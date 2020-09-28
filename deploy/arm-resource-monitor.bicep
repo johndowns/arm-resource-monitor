@@ -1,4 +1,9 @@
 param location string = resourceGroup().location
+param sendGridApiKey string
+param emailFromAddress string
+param emailFromName string
+param emailToAddress string = emailFromAddress
+param emailToName string = emailFromName
 
 param appNamePrefix string = uniqueString(resourceGroup().id)
 
@@ -79,6 +84,9 @@ resource functionApp 'Microsoft.Web/sites@2018-11-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp'
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     enabled: true
     serverFarmId: appServicePlan.id
@@ -110,21 +118,28 @@ resource functionApp 'Microsoft.Web/sites@2018-11-01' = {
             }
             {
                 name: 'SendGridApiKey'
-                value: 'TODO'
+                value: sendGridApiKey
             }
             {
-                name: 'SendGridEmailFromAddress'
-                value: 'TODO'
+                name: 'EmailFromAddress'
+                value: emailFromAddress
             }
             {
-                name: 'SendGridEmailFromName'
-                value: 'TODO'
+                name: 'EmailFromName'
+                value: emailFromName
             }
             {
-                name: 'AlertEmailAddress'
-                value: 'TODO'
+                name: 'EmailToAddress'
+                value: emailToAddress
             }
+            {
+                name: 'EmailToName'
+                value: emailToName
+          }
         ]
     }
   }
 }
+
+output functionIdentityPrincipalId string = functionApp.identity.principalId
+output functionAppUrl string = functionApp.properties.defaultHostName
