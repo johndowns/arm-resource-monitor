@@ -104,6 +104,8 @@ namespace ArmResourceMonitor
             }
             catch (HttpRequestException ex)
             {
+                Log.LogError(ex, "Unable to check resource.");
+
                 // Send errors to a special error queue for later handling.
                 var message = new CloudQueueMessage(ResourceId); // TODO work out what message should contain
                 await ErrorQueue.AddMessageAsync(message);

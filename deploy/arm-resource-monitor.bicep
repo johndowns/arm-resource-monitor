@@ -7,7 +7,7 @@ param emailToName string = emailFromName
 
 param appNamePrefix string = uniqueString(resourceGroup().id)
 
-var functionAppName = appNamePrefix
+var functionAppNameVariable = appNamePrefix
 var appServicePlanName = '${appNamePrefix}-plan'
 var appInsightsName = appNamePrefix
 var storageAccountName = format('{0}fn', replace(appNamePrefix, '-', ''))
@@ -81,7 +81,7 @@ resource appServicePlan 'Microsoft.Web/serverFarms@2019-08-01' = {
 
 // Function app.
 resource functionApp 'Microsoft.Web/sites@2018-11-01' = {
-  name: functionAppName
+  name: functionAppNameVariable
   location: location
   kind: 'functionapp'
   identity: {
@@ -142,4 +142,5 @@ resource functionApp 'Microsoft.Web/sites@2018-11-01' = {
 }
 
 output functionIdentityPrincipalId string = functionApp.identity.principalId
+output functionAppName string = functionAppNameVariable
 output functionAppUrl string = functionApp.properties.defaultHostName

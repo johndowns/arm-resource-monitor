@@ -30,7 +30,7 @@
   },
   "functions": [],
   "variables": {
-    "functionAppName": "[parameters('appNamePrefix')]",
+    "functionAppNameVariable": "[parameters('appNamePrefix')]",
     "appServicePlanName": "[format('{0}-plan', parameters('appNamePrefix'))]",
     "appInsightsName": "[parameters('appNamePrefix')]",
     "storageAccountName": "[format('{0}fn', replace(parameters('appNamePrefix'), '-', ''))]",
@@ -114,7 +114,7 @@
     {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2018-11-01",
-      "name": "[variables('functionAppName')]",
+      "name": "[variables('functionAppNameVariable')]",
       "location": "[parameters('location')]",
       "kind": "functionapp",
       "identity": {
@@ -182,11 +182,15 @@
   "outputs": {
     "functionIdentityPrincipalId": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2018-11-01', 'full').identity.principalId]"
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppNameVariable')), '2018-11-01', 'full').identity.principalId]"
+    },
+    "functionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppNameVariable')]"
     },
     "functionAppUrl": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName'))).defaultHostName]"
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppNameVariable'))).defaultHostName]"
     }
   }
 }
