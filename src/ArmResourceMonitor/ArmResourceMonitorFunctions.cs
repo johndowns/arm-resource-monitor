@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using System;
 using System.Text.RegularExpressions;
+using SendGrid.Helpers.Mail;
+using SendGrid;
 
 namespace ArmResourceMonitor
 {
@@ -15,12 +17,19 @@ namespace ArmResourceMonitor
 
         public string ApiVersion { get; set; }
 
-        public int CheckFrequencySeconds { get; set; } = 86400; // TODO change to minutes/days/timespan?
+        public string CheckFrequency { get; set; } = TimeSpan.FromDays(1).ToString();
     }
 
     public static class ArmResourceMonitorFunctions
     {
-        public static readonly Regex DisallowedCharsInTableKeys = new Regex(@"[\\\\#%+/?\u0000-\u001F\u007F-\u009F]");
+        private static string SendGridApiKey = Environment.GetEnvironmentVariable("SendGridApiKey");
+        private static string EmailFromAddress = Environment.GetEnvironmentVariable("EmailFromAddress");
+        private static string EmailFromName = Environment.GetEnvironmentVariable("EmailFromName");
+        private static string EmailToAddress = Environment.GetEnvironmentVariable("EmailToAddress");
+        private static string EmailToName = Environment.GetEnvironmentVariable("EmailToName");
+
+        private static readonly Regex DisallowedCharsInTableKeys = new Regex(@"[\\\\#%+/?\u0000-\u001F\u007F-\u009F]");
+        private static readonly SendGridClient EmailClient = new SendGridClient(SendGridApiKey);
 
         [FunctionName("AddResourceMonitor")]
         public static async Task<IActionResult> AddResourceMonitor(
@@ -36,24 +45,26 @@ namespace ArmResourceMonitor
                     error = "resourceId must be specified."
                 });
             }
-
             if (request.ApiVersion == null)
             {
-                request.ApiVersion = await ArmClient.GetLatestApiVersionForResource(request.ResourceId);
-
-                if (request.ApiVersion == null)
+                return new BadRequestObjectResult(new
                 {
-                    return new BadRequestObjectResult(new
-                    {
-                        error = "apiVersion could not be automatically determined and so must be specified."
-                    });
-                }
+                    error = "apiVersion must be specified."
+                });
             }
+            TimeSpan checkFrequency;
+            if (! TimeSpan.TryParse(request.CheckFrequency, out checkFrequency))
+            {
+                return new BadRequestObjectResult(new
+                {
+                    error = "checkFrequency is invalid."
+                });
+            }                
 
             // Initialize the monitor entity.
             var resourceMonitorId = DisallowedCharsInTableKeys.Replace(request.ResourceId, "|");
             var entityId = new EntityId(nameof(ResourceMonitorEntity), resourceMonitorId);
-            await entityClient.SignalEntityAsync(entityId, nameof(ResourceMonitorEntity.Initialize), (request.ResourceId, request.ApiVersion, TimeSpan.FromSeconds(request.CheckFrequencySeconds)));
+            await entityClient.SignalEntityAsync(entityId, nameof(ResourceMonitorEntity.Initialize), (request.ResourceId, request.ApiVersion, checkFrequency));
 
             return new OkResult();
         }
@@ -64,7 +75,7 @@ namespace ArmResourceMonitor
             ILogger log)
         {
             // TODO
-            return Task.CompletedTask;
+            return SendEmail(resourceUpdatedMessage, log);
         }
 
         [FunctionName("ProcessResourceUpdateError")]
@@ -73,7 +84,28 @@ namespace ArmResourceMonitor
             ILogger log)
         {
             // TODO
-            return Task.CompletedTask;
+            return SendEmail(errorMessage, log);
+        }
+
+        private static async Task SendEmail(string body, ILogger log)
+        {
+            // Prepare the email message.
+            var emailMessage = new SendGridMessage();
+            emailMessage.SetFrom(new EmailAddress(EmailFromAddress, EmailFromName));
+            emailMessage.AddTo(new EmailAddress(EmailToAddress, EmailToName));
+            emailMessage.Subject = "TODO";
+            emailMessage.PlainTextContent = body;
+
+            // Send the message.
+            var response = await EmailClient.SendEmailAsync(emailMessage);
+            log.LogInformation("Sent mail via SendGrid and received status code {SendGridStatusCode} and headers {SendGridHeaders}.", response.StatusCode, response.Headers.ToString());
+            
+            if ((int)response.StatusCode > 299)
+            {
+                var responseBody = await response.Body.ReadAsStringAsync();
+                log.LogError("Received error from SendGrid: {SendGridErrorBody}", responseBody);
+                throw new Exception("Unable to send email.");
+            }
         }
     }
 }

@@ -30,10 +30,5 @@ namespace ArmResourceMonitor
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
         }
-
-        public static async Task<string> GetLatestApiVersionForResource(string resourceId)
-        {
-            return null;
-        }
     }
 }
